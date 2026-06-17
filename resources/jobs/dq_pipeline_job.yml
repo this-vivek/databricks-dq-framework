@@ -1,5 +1,5 @@
-# DQ Pipeline Job — 4 sequential tasks
-# dq_run → dq_lineage → dq_alerts → dq_sla
+# DQ Pipeline Job — 3 sequential tasks
+# dq_run → dq_alerts → dq_sla
 # Deployed via: databricks bundle deploy --target <dev|prod>
 
 resources:
@@ -54,25 +54,11 @@ resources:
           libraries:
             - whl: ../../dist/dq_framework-1.1.0-py3-none-any.whl
 
-        # ── Task 1.5: Lineage Impact ──────────────────────────────────────────
-        - task_key: dq_lineage
-          description: "Traverse downstream lineage of failed tables, write impact report"
-          depends_on:
-            - task_key: dq_run
-          job_cluster_key: dq_cluster
-          notebook_task:
-            notebook_path: ../../notebooks/dq_lineage.py
-            base_parameters:
-              catalog: "{{job.parameters.catalog}}"
-              schema: "{{job.parameters.schema}}"
-          libraries:
-            - whl: ../../dist/dq_framework-1.1.0-py3-none-any.whl
-
         # ── Task 2: Alerts ────────────────────────────────────────────────────
         - task_key: dq_alerts
           description: "Detect metric / count / column drift, write alert tables"
           depends_on:
-            - task_key: dq_lineage
+            - task_key: dq_run
           job_cluster_key: dq_cluster
           notebook_task:
             notebook_path: ../../notebooks/dq_alerts.py

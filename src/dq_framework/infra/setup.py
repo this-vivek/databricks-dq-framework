@@ -104,27 +104,11 @@ PARTITIONED BY (partition_date)
 COMMENT 'SLA breach log — populated by DQSLAChecker'
 """
 
-_LINEAGE_IMPACT_DDL = """
-CREATE TABLE IF NOT EXISTS {catalog}.{schema}.dq_lineage_impact_audit (
-    failed_table       STRING    COMMENT 'Table where DQ failed',
-    downstream_table   STRING    COMMENT 'Downstream dependent table',
-    hop_depth          INT       COMMENT 'Number of hops from failed table (1 = direct)',
-    failed_dq_score    STRING    COMMENT 'DQ score of the failed source table',
-    impact_severity    STRING    COMMENT 'HIGH / MEDIUM / LOW based on hop depth and score',
-    downstream_owner   STRING    COMMENT 'sla_owner of the downstream table from dq_config',
-    partition_date     DATE      COMMENT 'Date of the impact report',
-    created_at         TIMESTAMP COMMENT 'When this record was written'
-) USING DELTA
-PARTITIONED BY (partition_date)
-COMMENT 'Lineage impact audit — downstream tables affected by DQ failures'
-"""
-
 _CORE_TABLES: dict[str, str] = {
-    "dq_config":                _CONFIG_DDL,
-    "dq_audit":                 _AUDIT_DDL,
-    "dq_rule_history":          _RULE_HISTORY_DDL,
-    "dq_sla_breach_audit":      _SLA_BREACH_DDL,
-    "dq_lineage_impact_audit":  _LINEAGE_IMPACT_DDL,
+    "dq_config":           _CONFIG_DDL,
+    "dq_audit":            _AUDIT_DDL,
+    "dq_rule_history":     _RULE_HISTORY_DDL,
+    "dq_sla_breach_audit": _SLA_BREACH_DDL,
 }
 
 
