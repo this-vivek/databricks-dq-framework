@@ -1,0 +1,26 @@
+# Databricks App manifest — DQ Framework REST API
+# Deploy via: databricks bundle deploy --target dev
+# The app will be available at the URL shown in the Apps UI.
+
+command:
+  - uvicorn
+  - dq_framework.api.app:app
+  - --host
+  - "0.0.0.0"
+  - --port
+  - "8000"
+
+env:
+  # Unity Catalog target — overridden per environment via DAB variables
+  - name: DQ_CATALOG
+    value: "dev_catalog"
+
+  - name: DQ_SCHEMA
+    value: "dq"
+
+  # SQL Warehouse ID used by the API to query Delta tables.
+  # Set this to a Serverless or Pro SQL warehouse in your workspace.
+  # Find it: Databricks UI → SQL Warehouses → <warehouse> → Connection details → HTTP path
+  # Extract the ID from: /sql/1.0/warehouses/<WAREHOUSE_ID>
+  - name: WAREHOUSE_ID
+    value: ""    # REQUIRED: fill in before deploying

@@ -75,6 +75,7 @@ from .infra.scheduling import DQScheduler
 from .infra.setup import DQSetup
 from .infra.views import DQViews
 from .monitoring.alerts import DQAlertSystem
+from .monitoring.lineage import DQLineage
 from .monitoring.notifications import DQNotifier
 from .monitoring.sla import DQSLAChecker
 from .quality.quarantine import DQQuarantine
@@ -92,6 +93,7 @@ __all__ = [
     "DQBatchResult",
     # Alerting & notifications
     "DQAlertSystem",
+    "DQLineage",
     "DQNotifier",
     # Rules
     "RuleTemplate",
