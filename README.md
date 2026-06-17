@@ -319,4 +319,4 @@ python -m build           # build wheel
 
 ## License
 
-[MIT](LICENSE) © Celebal Technologies
+[MIT](LICENSE) © Vivek Rawat
