@@ -1,0 +1,85 @@
+# DQ Pipeline Job — 3 sequential tasks
+# dq_run → dq_alerts → dq_sla
+# Deployed via: databricks bundle deploy --target <dev|prod>
+
+resources:
+  jobs:
+    dq_pipeline:
+      name: "dq-framework-pipeline"
+      description: "End-to-end Data Quality pipeline: run rules, emit alerts, evaluate SLAs"
+
+      # ── Shared job cluster (spun up once, reused across all 3 tasks) ────────
+      job_clusters:
+        - job_cluster_key: dq_cluster
+          new_cluster:
+            spark_version: ${var.spark_version}
+            node_type_id: ${var.node_type}
+            num_workers: ${var.num_workers}
+            data_security_mode: SINGLE_USER
+            spark_conf:
+              spark.databricks.delta.preview.enabled: "true"
+            azure_attributes:
+              availability: ON_DEMAND_AZURE
+
+      # ── Email notification on failure ────────────────────────────────────────
+      email_notifications:
+        on_failure:
+          - ${var.notification_email}
+
+      # ── Schedule: daily at 06:00 UTC (paused in dev) ─────────────────────────
+      schedule:
+        quartz_cron_expression: "0 0 6 * * ?"
+        timezone_id: UTC
+        pause_status: ${var.schedule_pause_status}
+
+      # ── Parameters available in every task notebook via dbutils.widgets ───────
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${var.schema}
+
+      # ── Tasks ─────────────────────────────────────────────────────────────────
+      tasks:
+
+        # ── Task 1: Run DQ Rules ──────────────────────────────────────────────
+        - task_key: dq_run
+          description: "Apply DQ rules to all registered tables, write audit + quarantine"
+          job_cluster_key: dq_cluster
+          notebook_task:
+            notebook_path: ../../notebooks/dq_run.py
+            base_parameters:
+              catalog: "{{job.parameters.catalog}}"
+              schema: "{{job.parameters.schema}}"
+          libraries:
+            - whl: ../../dist/dq_framework-1.1.0-py3-none-any.whl
+
+        # ── Task 2: Alerts ────────────────────────────────────────────────────
+        - task_key: dq_alerts
+          description: "Detect metric / count / column drift, write alert tables"
+          depends_on:
+            - task_key: dq_run
+          job_cluster_key: dq_cluster
+          notebook_task:
+            notebook_path: ../../notebooks/dq_alerts.py
+            base_parameters:
+              catalog: "{{job.parameters.catalog}}"
+              schema: "{{job.parameters.schema}}"
+              mode: alerts
+          libraries:
+            - whl: ../../dist/dq_framework-1.1.0-py3-none-any.whl
+
+        # ── Task 3: SLA Check ─────────────────────────────────────────────────
+        - task_key: dq_sla
+          description: "Evaluate SLA thresholds, write breach audit"
+          depends_on:
+            - task_key: dq_alerts
+          job_cluster_key: dq_cluster
+          notebook_task:
+            notebook_path: ../../notebooks/dq_alerts.py
+            base_parameters:
+              catalog: "{{job.parameters.catalog}}"
+              schema: "{{job.parameters.schema}}"
+              mode: sla
+          libraries:
+            - whl: ../../dist/dq_framework-1.1.0-py3-none-any.whl

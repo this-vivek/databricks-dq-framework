@@ -1,0 +1,146 @@
+# Azure DevOps Pipeline — dq-framework
+#
+# Stages:
+#   CI       — runs on every PR to main (lint, test, bundle validate)
+#   DeployDev  — auto-deploys to dev on merge to main
+#   DeployProd — deploys to prod after manual approval gate
+#
+# Required pipeline variables (set in ADO Library / variable group "dq-framework"):
+#   DATABRICKS_HOST_DEV   — https://<dev-workspace>.azuredatabricks.net
+#   DATABRICKS_TOKEN_DEV  — PAT or service-principal token for dev workspace
+#   DATABRICKS_HOST_PROD  — https://<prod-workspace>.azuredatabricks.net
+#   DATABRICKS_TOKEN_PROD — PAT or service-principal token for prod workspace
+#   CATALOG_DEV           — dev_catalog
+#   CATALOG_PROD          — prod_catalog
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    exclude:
+      - "*.md"
+      - docs/**
+
+pr:
+  branches:
+    include:
+      - main
+
+variables:
+  pythonVersion: "3.11"
+  databricksCLIVersion: "0.221.1"     # pin; update consciously
+
+# ── Stage 1: CI ────────────────────────────────────────────────────────────────
+stages:
+  - stage: CI
+    displayName: "CI — lint, test, validate bundle"
+    jobs:
+      - job: Test
+        displayName: "pytest + ruff + bundle validate"
+        pool:
+          vmImage: ubuntu-latest
+
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: $(pythonVersion)
+            displayName: "Set Python $(pythonVersion)"
+
+          - script: |
+              pip install --upgrade pip
+              pip install -e ".[dev]"
+            displayName: "Install package + dev deps"
+
+          - script: |
+              ruff check src/ tests/
+            displayName: "Lint (ruff)"
+            continueOnError: false
+
+          - script: |
+              pytest tests/ -v --tb=short --junitxml=test-results.xml
+            displayName: "Run tests"
+
+          - task: PublishTestResults@2
+            inputs:
+              testResultsFormat: JUnit
+              testResultsFiles: test-results.xml
+            condition: always()
+            displayName: "Publish test results"
+
+          - script: |
+              pip install databricks-cli==$(databricksCLIVersion)
+              databricks bundle validate --target dev
+            displayName: "Validate DAB (dev target)"
+            env:
+              DATABRICKS_HOST: $(DATABRICKS_HOST_DEV)
+              DATABRICKS_TOKEN: $(DATABRICKS_TOKEN_DEV)
+
+# ── Stage 2: Deploy to Dev ─────────────────────────────────────────────────────
+  - stage: DeployDev
+    displayName: "Deploy → Dev"
+    dependsOn: CI
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - deployment: DeployDev
+        displayName: "Bundle deploy (dev)"
+        environment: dq-framework-dev
+        pool:
+          vmImage: ubuntu-latest
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+
+                - task: UsePythonVersion@0
+                  inputs:
+                    versionSpec: $(pythonVersion)
+
+                - script: |
+                    pip install --upgrade pip
+                    pip install databricks-cli==$(databricksCLIVersion) build
+                  displayName: "Install Databricks CLI + build"
+
+                - script: |
+                    databricks bundle deploy --target dev
+                  displayName: "Bundle deploy to dev"
+                  env:
+                    DATABRICKS_HOST: $(DATABRICKS_HOST_DEV)
+                    DATABRICKS_TOKEN: $(DATABRICKS_TOKEN_DEV)
+                    DATABRICKS_BUNDLE_VAR_catalog: $(CATALOG_DEV)
+
+# ── Stage 3: Deploy to Prod (requires manual approval) ─────────────────────────
+  - stage: DeployProd
+    displayName: "Deploy → Prod"
+    dependsOn: DeployDev
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - deployment: DeployProd
+        displayName: "Bundle deploy (prod)"
+        # "dq-framework-prod" environment must have an Approval check configured in ADO
+        environment: dq-framework-prod
+        pool:
+          vmImage: ubuntu-latest
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+
+                - task: UsePythonVersion@0
+                  inputs:
+                    versionSpec: $(pythonVersion)
+
+                - script: |
+                    pip install --upgrade pip
+                    pip install databricks-cli==$(databricksCLIVersion) build
+                  displayName: "Install Databricks CLI + build"
+
+                - script: |
+                    databricks bundle deploy --target prod
+                  displayName: "Bundle deploy to prod"
+                  env:
+                    DATABRICKS_HOST: $(DATABRICKS_HOST_PROD)
+                    DATABRICKS_TOKEN: $(DATABRICKS_TOKEN_PROD)
+                    DATABRICKS_BUNDLE_VAR_catalog: $(CATALOG_PROD)

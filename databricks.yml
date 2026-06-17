@@ -1,0 +1,97 @@
+# Databricks Asset Bundle — dq-framework
+# Deploy with: databricks bundle deploy --target dev|prod
+# Validate with: databricks bundle validate
+
+bundle:
+  name: dq-framework
+
+# ── Wheel artifact ─────────────────────────────────────────────────────────────
+# DAB builds the wheel and uploads it automatically on every `bundle deploy`.
+artifacts:
+  dq_framework_whl:
+    type: whl
+    path: .
+    build: "pip install build --quiet && python -m build --wheel --outdir dist/"
+
+# ── Workspace root (all notebooks/resources land here) ────────────────────────
+workspace:
+  root_path: ~/.bundle/dq-framework/${bundle.target}
+
+# ── Shared variable defaults (overridden per target below) ────────────────────
+variables:
+  catalog:
+    description: "Unity Catalog name for DQ objects"
+    default: dev_catalog
+
+  schema:
+    description: "Schema for all DQ tables and views"
+    default: dq
+
+  spark_version:
+    description: "Databricks Runtime version for job clusters"
+    default: "15.4.x-scala2.12"
+
+  node_type:
+    description: "VM type for job cluster driver and workers"
+    default: "Standard_DS3_v2"
+
+  num_workers:
+    description: "Number of worker nodes in the job cluster"
+    default: "1"
+
+  schedule_pause_status:
+    description: "PAUSED in dev, UNPAUSED in prod"
+    default: PAUSED
+
+  notification_email:
+    description: "Email for job failure alerts"
+    default: <email>
+
+  slack_webhook:
+    description: "Slack webhook URL for DQ notifications (leave empty to skip)"
+    default: ""
+
+# ── Include job resource files ─────────────────────────────────────────────────
+include:
+  - resources/jobs/*.yml
+
+# ── Targets (environments) ─────────────────────────────────────────────────────
+targets:
+
+  # --------------------------------------------------------------------------
+  # DEV — development mode: resource names are auto-prefixed with [dev],
+  #        schedule is paused, uses an existing interactive cluster.
+  # --------------------------------------------------------------------------
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://adb-<DBX_URI>.azuredatabricks.net
+      profile: <ProfileName>
+    variables:
+      catalog: quality_assurance
+      schema: dq
+      schedule_pause_status: PAUSED
+
+  # --------------------------------------------------------------------------
+  # STAGING — pre-prod smoke test, full job cluster, schedule paused.
+  # --------------------------------------------------------------------------
+  staging:
+    workspace:
+      host: https://<your-staging-workspace>.azuredatabricks.net
+    variables:
+      catalog: staging_catalog
+      schema: dq
+      schedule_pause_status: PAUSED
+
+  # --------------------------------------------------------------------------
+  # PROD — production: real catalog, schedule active, dedicated job cluster.
+  # --------------------------------------------------------------------------
+  prod:
+    mode: production
+    workspace:
+      host: https://<your-prod-workspace>.azuredatabricks.net
+    variables:
+      catalog: prod_catalog
+      schema: dq
+      schedule_pause_status: UNPAUSED
