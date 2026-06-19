@@ -6,7 +6,7 @@ resources:
   jobs:
     dq_pipeline:
       name: "dq-framework-pipeline"
-      description: "End-to-end Data Quality pipeline: run rules, emit alerts, evaluate SLAs"
+      description: "End-to-end Data Quality pipeline: run rules, emit alerts, evaluate SLAs and improvements."
 
       # ── Shared job cluster (spun up once, reused across all 3 tasks) ────────
       job_clusters:
